@@ -17,10 +17,9 @@ struct MusicPlayerView: View {
     let albumArtNamespace: Namespace.ID
 
     var body: some View {
-        HStack {
-            AlbumArtView(vm: vm, albumArtNamespace: albumArtNamespace).padding(.all, 5)
-            MusicControlsView().drawingGroup().compositingGroup()
-        }
+        MusicControlsView(albumArtNamespace: albumArtNamespace)
+            .drawingGroup()
+            .compositingGroup()
     }
 }
 
@@ -36,6 +35,9 @@ struct AlbumArtView: View {
             }
             albumArtButton
         }
+        // Keep the expanded player compact; only the artwork footprint changes.
+        .frame(width: 55, height: 55)
+        .offset(x: -6.5, y: 0)
     }
 
     private var albumArtBackground: some View {
@@ -60,10 +62,7 @@ struct AlbumArtView: View {
             Button {
                 musicManager.openMusicApp()
             } label: {
-                ZStack(alignment:.bottomTrailing) {
-                    albumArtImage
-                    appIconOverlay
-                }
+                albumArtImage
             }
             .buttonStyle(PlainButtonStyle())
             .scaleEffect(musicManager.isPlaying ? 1 : 0.85)
@@ -95,36 +94,195 @@ struct AlbumArtView: View {
             )
     }
 
-    @ViewBuilder
-    private var appIconOverlay: some View {
-        if vm.notchState == .open && !musicManager.usingAppIconForArtwork {
-            AppIcon(for: musicManager.bundleIdentifier ?? "com.apple.Music")
-                .resizable()
-                .aspectRatio(contentMode: .fill)
-                .frame(width: 30, height: 30)
-                .offset(x: 10, y: 10)
-                .transition(.scale.combined(with: .opacity))
-                .zIndex(2)
-        }
-    }
 }
 
 struct MusicControlsView: View {
+    private enum TransportControl: Hashable {
+        case previous
+        case playPause
+        case next
+    }
+
     @ObservedObject var musicManager = MusicManager.shared
-        @EnvironmentObject var vm: BoringViewModel
-        @ObservedObject var webcamManager = WebcamManager.shared
+    @EnvironmentObject var vm: BoringViewModel
+    let albumArtNamespace: Namespace.ID
     @State private var sliderValue: Double = 0
     @State private var dragging: Bool = false
     @State private var lastDragged: Date = .distantPast
+    @State private var pressedTransport: TransportControl?
+    @State private var hoveredTransport: TransportControl?
+    @State private var isChangingTrack = false
     @Default(.musicControlSlots) private var slotConfig
     @Default(.musicControlSlotLimit) private var slotLimit
 
     var body: some View {
-        VStack(alignment: .leading) {
-            songInfoAndSlider
-            slotToolbar
+        VStack(spacing: 0) {
+            HStack(alignment: .center, spacing: 10) {
+                AlbumArtView(vm: vm, albumArtNamespace: albumArtNamespace)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(musicManager.songTitle)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.65)
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(width: 132, alignment: .leading)
+                    MarqueeText(
+                        $musicManager.artistName,
+                        font: .system(size: 11.5, weight: .medium),
+                        nsFont: .subheadline,
+                        textColor: .gray,
+                        frameWidth: 132
+                    )
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                StaticArtworkWaveform(
+                    color: Color(nsColor: musicManager.avgColor)
+                        .ensureMinimumBrightness(factor: 0.8),
+                    isPlaying: musicManager.isPlaying
+                )
+                    .frame(width: 20, height: 18)
+                    .offset(x: -4)
+                    .matchedGeometryEffect(id: "spectrum", in: albumArtNamespace)
+            }
+            .frame(height: 64)
+            .opacity(isChangingTrack ? 0.58 : 1)
+            .blur(radius: isChangingTrack ? 4 : 0)
+            .scaleEffect(isChangingTrack ? 0.96 : 1)
+            .animation(.easeInOut(duration: 0.16), value: isChangingTrack)
+
+            musicSlider
+                .padding(.top, 4)
+                .opacity(isChangingTrack ? 0.58 : 1)
+                .blur(radius: isChangingTrack ? 4 : 0)
+                .scaleEffect(isChangingTrack ? 0.96 : 1)
+                .animation(.easeInOut(duration: 0.16), value: isChangingTrack)
+
+            transportControls
+                .padding(.top, 6)
         }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 5)
+        .frame(maxWidth: .infinity, alignment: .top)
+        .offset(y: -8)
         .buttonStyle(PlainButtonStyle())
+    }
+
+    private var transportControls: some View {
+        HStack(spacing: 38) {
+            Button {
+                performTransportAction(.previous, changesTrack: true) {
+                    MusicManager.shared.previousTrack()
+                }
+            } label: {
+                Image(systemName: "backward.fill")
+                    .font(.system(size: 17, weight: .bold))
+                    .scaleEffect(pressedTransport == .previous ? 0.93 : 1)
+                .offset(y: pressedTransport == .previous ? 1 : 0)
+                .animation(transportPressAnimation, value: pressedTransport == .previous)
+                .background { transportPressSurface(for: .previous, diameter: 40) }
+        }
+        .onHover { isHovering in
+            updateHoveredTransport(.previous, isHovering: isHovering)
+        }
+
+        Button {
+                performTransportAction(.playPause, changesTrack: false) {
+                    MusicManager.shared.togglePlay()
+                }
+            } label: {
+                Image(systemName: musicManager.isPlaying ? "pause.fill" : "play.fill")
+                    .font(.system(size: 22, weight: .bold))
+                    .frame(width: 24)
+                    .contentTransition(.opacity)
+                    .animation(.easeInOut(duration: 0.12), value: musicManager.isPlaying)
+                    .scaleEffect(pressedTransport == .playPause ? 0.93 : 1)
+                .offset(y: pressedTransport == .playPause ? 1 : 0)
+                .animation(transportPressAnimation, value: pressedTransport == .playPause)
+                .background { transportPressSurface(for: .playPause, diameter: 44) }
+        }
+        .onHover { isHovering in
+            updateHoveredTransport(.playPause, isHovering: isHovering)
+        }
+
+        Button {
+                performTransportAction(.next, changesTrack: true) {
+                    MusicManager.shared.nextTrack()
+                }
+            } label: {
+                Image(systemName: "forward.fill")
+                    .font(.system(size: 17, weight: .bold))
+                    .scaleEffect(pressedTransport == .next ? 0.93 : 1)
+                .offset(y: pressedTransport == .next ? 1 : 0)
+                .animation(transportPressAnimation, value: pressedTransport == .next)
+                .background { transportPressSurface(for: .next, diameter: 40) }
+        }
+        .onHover { isHovering in
+            updateHoveredTransport(.next, isHovering: isHovering)
+        }
+        }
+        .foregroundStyle(.white)
+        .frame(maxWidth: .infinity)
+    }
+
+    private var transportPressAnimation: Animation {
+        .spring(response: 0.10, dampingFraction: 0.86, blendDuration: 0.02)
+    }
+
+    @ViewBuilder
+    private func transportPressSurface(for control: TransportControl, diameter: CGFloat) -> some View {
+        RoundedRectangle(cornerRadius: 11, style: .continuous)
+            .fill(.white.opacity(0.10))
+            .frame(width: diameter, height: diameter)
+            .scaleEffect(isTransportHighlighted(control) ? 1 : 0.55)
+            .opacity(isTransportHighlighted(control) ? 1 : 0)
+            .animation(transportPressAnimation, value: isTransportHighlighted(control))
+    }
+
+    private func isTransportHighlighted(_ control: TransportControl) -> Bool {
+        pressedTransport == control || hoveredTransport == control
+    }
+
+    private func updateHoveredTransport(_ control: TransportControl, isHovering: Bool) {
+        if isHovering {
+            hoveredTransport = control
+        } else if hoveredTransport == control {
+            hoveredTransport = nil
+        }
+    }
+
+    private func performTransportAction(
+        _ control: TransportControl,
+        changesTrack: Bool,
+        action: () -> Void
+    ) {
+        withAnimation(transportPressAnimation) {
+            pressedTransport = control
+            if changesTrack {
+                isChangingTrack = true
+            }
+        }
+
+        action()
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+            withAnimation(.easeOut(duration: 0.12)) {
+                if pressedTransport == control {
+                    pressedTransport = nil
+                }
+            }
+        }
+
+        guard changesTrack else { return }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.30) {
+            withAnimation(.easeInOut(duration: 0.14)) {
+                isChangingTrack = false
+            }
+        }
     }
 
     private var songInfoAndSlider: some View {
@@ -205,8 +363,7 @@ struct MusicControlsView: View {
             ) { newValue in
                 MusicManager.shared.seek(to: newValue)
             }
-            .padding(.top, 5)
-            .frame(height: 36)
+            .frame(height: 16)
         }
     }
 
@@ -228,12 +385,6 @@ struct MusicControlsView: View {
         )
         let padded = slotConfig.padded(to: sanitizedLimit, filler: .none)
         let result = Array(padded.prefix(sanitizedLimit))
-        // If calendar and camera are both visible alongside music, hide the edge slots
-        let shouldHideEdges = Defaults[.showCalendar] && Defaults[.showMirror] && webcamManager.cameraAvailable && vm.isCameraExpanded
-        if shouldHideEdges && result.count >= 5 {
-            return Array(result.dropFirst().dropLast())
-        }
-
         return result
     }
 
@@ -420,8 +571,6 @@ struct VolumeControlView: View {
 
 struct NotchHomeView: View {
     @EnvironmentObject var vm: BoringViewModel
-    @ObservedObject var webcamManager = WebcamManager.shared
-    @ObservedObject var batteryModel = BatteryStatusViewModel.shared
     @ObservedObject var coordinator = BoringViewCoordinator.shared
     let albumArtNamespace: Namespace.ID
 
@@ -435,34 +584,50 @@ struct NotchHomeView: View {
         .transition(.opacity)
     }
 
-    private var shouldShowCamera: Bool {
-        Defaults[.showMirror] && webcamManager.cameraAvailable && vm.isCameraExpanded
-    }
-
     private var mainContent: some View {
-        HStack(alignment: .top, spacing: (shouldShowCamera && Defaults[.showCalendar]) ? 10 : 15) {
+        HStack(alignment: .top, spacing: 15) {
             MusicPlayerView(albumArtNamespace: albumArtNamespace)
-
-            if Defaults[.showCalendar] {
-                CalendarView()
-                    .frame(width: shouldShowCamera ? 170 : 215)
-                    .onHover { isHovering in
-                        vm.isHoveringCalendar = isHovering
-                    }
-                    .environmentObject(vm)
-                    .transition(.opacity)
-            }
-
-            if shouldShowCamera {
-                CameraPreviewView(webcamManager: webcamManager)
-                    .scaledToFit()
-                    .opacity(vm.notchState == .closed ? 0 : 1)
-                    .blur(radius: vm.notchState == .closed ? 20 : 0)
-                    .animation(.interactiveSpring(response: 0.32, dampingFraction: 0.76, blendDuration: 0), value: shouldShowCamera)
-            }
         }
         .transition(.asymmetric(insertion: .opacity.combined(with: .move(edge: .top)), removal: .opacity))
         .blur(radius: vm.notchState == .closed ? 30 : 0)
+    }
+}
+
+private struct StaticArtworkWaveform: View {
+    let color: Color
+    let isPlaying: Bool
+    private let barHeights: [CGFloat] = [7, 13, 10, 16, 8]
+
+    var body: some View {
+        if !isPlaying {
+            HStack(spacing: 2) {
+                ForEach(0..<6, id: \.self) { _ in
+                    Capsule()
+                        .fill(color)
+                        .frame(width: 2, height: 2)
+                }
+            }
+            .frame(maxHeight: .infinity)
+        } else {
+        TimelineView(.animation(minimumInterval: 1.0 / 60.0, paused: !isPlaying)) { timeline in
+            HStack(alignment: .center, spacing: 2) {
+                ForEach(Array(barHeights.enumerated()), id: \.offset) { index, baseHeight in
+                    Capsule()
+                        .fill(color)
+                        .frame(width: 2, height: animatedHeight(for: index, baseHeight: baseHeight, at: timeline.date))
+                }
+            }
+            .frame(maxHeight: .infinity)
+        }
+        }
+    }
+
+    private func animatedHeight(for index: Int, baseHeight: CGFloat, at date: Date) -> CGFloat {
+        guard isPlaying else { return baseHeight }
+
+        let phase = date.timeIntervalSinceReferenceDate * 4.2 + Double(index) * 1.47
+        let pulse = 0.58 + 0.42 * ((sin(phase) + 1) / 2)
+        return max(4, baseHeight * pulse)
     }
 }
 
@@ -481,33 +646,38 @@ struct MusicSliderView: View {
 
 
     var body: some View {
-        VStack {
+        HStack(spacing: 10) {
+            Text(timeString(from: sliderValue))
+                .frame(width: 32, alignment: .leading)
+                .font(.system(size: 9, weight: .medium))
+                .foregroundColor(
+                    Defaults[.playerColorTinting]
+                        ? Color(nsColor: color).ensureMinimumBrightness(factor: 0.6) : .gray
+                )
+
             CustomSlider(
                 value: $sliderValue,
                 range: 0...duration,
-                color: Defaults[.sliderColor] == SliderColorEnum.albumArt
-                    ? Color(nsColor: color).ensureMinimumBrightness(factor: 0.8)
-                    : Defaults[.sliderColor] == SliderColorEnum.accent ? .effectiveAccent : .white,
+                color: Color(nsColor: color).ensureMinimumBrightness(factor: 0.8),
                 dragging: $dragging,
                 lastDragged: $lastDragged,
                 onValueChange: onValueChange
             )
-            .frame(height: 10, alignment: .center)
+            .frame(width: 200, height: 16, alignment: .center)
 
-            HStack {
-                Text(timeString(from: sliderValue))
-                Spacer()
-                Text(timeString(from: duration))
-            }
+            Text("-\(timeString(from: max(0, duration - sliderValue)))")
+                .frame(width: 38, alignment: .trailing)
             .fontWeight(.medium)
             .foregroundColor(
                 Defaults[.playerColorTinting]
                     ? Color(nsColor: color).ensureMinimumBrightness(factor: 0.6) : .gray
             )
-            .font(.caption)
+            .font(.system(size: 9, weight: .medium))
         }
         .onChange(of: currentDate) {
-           guard !dragging, timestampDate.timeIntervalSince(lastDragged) > -1 else { return }
+            // Preserve the user's selected position until the media app has had a
+            // moment to publish its new playback timestamp.
+            guard !dragging, currentDate.timeIntervalSince(lastDragged) > 0.6 else { return }
             sliderValue = MusicManager.shared.estimatedPlaybackPosition(at: currentDate)
         }
     }
@@ -538,7 +708,7 @@ struct CustomSlider: View {
     var body: some View {
         GeometryReader { geometry in
             let width = geometry.size.width
-            let height = CGFloat(dragging ? 9 : 5)
+            let height = CGFloat(dragging ? 7 : 4)
             let rangeSpan = range.upperBound - range.lowerBound
 
             let progress = rangeSpan == .zero ? 0 : (value - range.lowerBound) / rangeSpan
@@ -555,6 +725,7 @@ struct CustomSlider: View {
             }
             .cornerRadius(height / 2)
             .frame(height: 10)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
             .contentShape(Rectangle())
             .gesture(
                 DragGesture(minimumDistance: 0)
@@ -567,9 +738,9 @@ struct CustomSlider: View {
                         onDragChange?(value)
                     }
                     .onEnded { _ in
+                        lastDragged = Date()
                         onValueChange?(value)
                         dragging = false
-                        lastDragged = Date()
                     }
             )
             .animation(.spring(response: 0.35, dampingFraction: 0.7), value: dragging)

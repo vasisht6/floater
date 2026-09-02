@@ -201,6 +201,9 @@
         }
       }
     },
+    "-%@" : {
+
+    },
     "'Now Playing' was the only option on previous versions and works with all media apps." : {
       "localizations" : {
         "ar" : {
@@ -1502,6 +1505,7 @@
       }
     },
     "Access Denied" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ar" : {
           "stringUnit" : {
@@ -2503,6 +2507,7 @@
       }
     },
     "Always show tabs" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ar" : {
           "stringUnit" : {
@@ -2903,6 +2908,7 @@
       }
     },
     "Automatically check for updates" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ar" : {
           "stringUnit" : {
@@ -3003,6 +3009,7 @@
       }
     },
     "Automatically download updates" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ar" : {
           "stringUnit" : {
@@ -4603,6 +4610,7 @@
       }
     },
     "Check for Updates…" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ar" : {
           "stringUnit" : {
@@ -5003,6 +5011,7 @@
       }
     },
     "Choose which service to use when sharing files from the shelf. Click the shelf button to select files, or drag files onto it to share immediately." : {
+      "extractionState" : "stale",
       "localizations" : {
         "ar" : {
           "stringUnit" : {
@@ -5103,6 +5112,7 @@
       }
     },
     "Circle" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ar" : {
           "stringUnit" : {
@@ -5902,6 +5912,9 @@
         }
       }
     },
+    "Connected" : {
+
+    },
     "Continue" : {
       "localizations" : {
         "ar" : {
@@ -6003,6 +6016,7 @@
       }
     },
     "Copy items on drag" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ar" : {
           "stringUnit" : {
@@ -6203,6 +6217,7 @@
       }
     },
     "Currently selected: %@" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ar" : {
           "stringUnit" : {
@@ -7405,6 +7420,9 @@
         }
       }
     },
+    "Disconnected" : {
+
+    },
     "Download" : {
       "localizations" : {
         "ar" : {
@@ -7807,6 +7825,7 @@
       }
     },
     "Drop files here" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ar" : {
           "stringUnit" : {
@@ -8207,6 +8226,7 @@
       }
     },
     "Enable boring mirror" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ar" : {
           "stringUnit" : {
@@ -8708,6 +8728,7 @@
       }
     },
     "Enable shelf" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ar" : {
           "stringUnit" : {
@@ -9108,6 +9129,7 @@
       }
     },
     "Expanded drag detection area" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ar" : {
           "stringUnit" : {
@@ -9409,6 +9431,7 @@
       }
     },
     "Files dropped on the shelf will be shared via this service" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ar" : {
           "stringUnit" : {
@@ -11209,6 +11232,7 @@
       }
     },
     "Hover delay" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ar" : {
           "stringUnit" : {
@@ -13710,6 +13734,7 @@
       }
     },
     "Mirror" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ar" : {
           "stringUnit" : {
@@ -13810,6 +13835,7 @@
       }
     },
     "Mirror shape" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ar" : {
           "stringUnit" : {
@@ -15711,6 +15737,7 @@
       }
     },
     "Open notch on hover" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ar" : {
           "stringUnit" : {
@@ -15911,6 +15938,7 @@
       }
     },
     "Open shelf by default if items are present" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ar" : {
           "stringUnit" : {
@@ -16109,6 +16137,9 @@
           }
         }
       }
+    },
+    "Peek notch on hover" : {
+
     },
     "Pick a Color" : {
       "localizations" : {
@@ -16511,6 +16542,7 @@
       }
     },
     "Quick Share" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ar" : {
           "stringUnit" : {
@@ -16611,6 +16643,7 @@
       }
     },
     "Quick Share Service" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ar" : {
           "stringUnit" : {
@@ -17011,6 +17044,7 @@
       }
     },
     "Remember last tab" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ar" : {
           "stringUnit" : {
@@ -17311,6 +17345,7 @@
       }
     },
     "Remove from shelf after dragging" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ar" : {
           "stringUnit" : {
@@ -18513,6 +18548,7 @@
       }
     },
     "Shelf" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ar" : {
           "stringUnit" : {
@@ -18613,6 +18649,7 @@
       }
     },
     "Shortcuts" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ar" : {
           "stringUnit" : {
@@ -20313,6 +20350,7 @@
       }
     },
     "Sneak Peek shows the media title and artist under the notch for a few seconds." : {
+      "extractionState" : "stale",
       "localizations" : {
         "ar" : {
           "stringUnit" : {
@@ -20513,6 +20551,7 @@
       }
     },
     "Software updates" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ar" : {
           "stringUnit" : {
@@ -20713,6 +20752,7 @@
       }
     },
     "Square" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ar" : {
           "stringUnit" : {
@@ -21415,6 +21455,7 @@
       }
     },
     "Toggle Notch Open:" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ar" : {
           "stringUnit" : {
@@ -21515,6 +21556,7 @@
       }
     },
     "Toggle Sneak Peek:" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ar" : {
           "stringUnit" : {

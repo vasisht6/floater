@@ -21,12 +21,9 @@ public enum ContentType: Int, Codable, Hashable, Equatable {
 
 public enum NotchState {
     case closed
+    case hoverPeek
+    case bluetooth
     case open
-}
-
-public enum NotchViews {
-    case home
-    case shelf
 }
 
 enum SettingsEnum {
@@ -49,11 +46,6 @@ enum DownloadIconStyle: String, Defaults.Serializable {
     case onlyAppIcon = "Only app icon"
     case onlyIcon = "Only download icon"
     case iconAndAppIcon = "Icon and app icon"
-}
-
-enum MirrorShapeEnum: String, Defaults.Serializable {
-    case rectangle = "Rectangular"
-    case circle = "Circular"
 }
 
 enum WindowHeightMode: String, Defaults.Serializable {

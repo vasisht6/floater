@@ -102,18 +102,28 @@ class AudioSpectrum: NSView {
             stopAnimating()
         }
     }
+
+    func setBarColor(_ color: NSColor) {
+        for barLayer in barLayers {
+            barLayer.fillColor = color.cgColor
+            barLayer.backgroundColor = color.cgColor
+        }
+    }
 }
 
 struct AudioSpectrumView: NSViewRepresentable {
     @Binding var isPlaying: Bool
+    var color: NSColor = .white
     
     func makeNSView(context: Context) -> AudioSpectrum {
         let spectrum = AudioSpectrum()
+        spectrum.setBarColor(color)
         spectrum.setPlaying(isPlaying)
         return spectrum
     }
     
     func updateNSView(_ nsView: AudioSpectrum, context: Context) {
+        nsView.setBarColor(color)
         nsView.setPlaying(isPlaying)
     }
 }

@@ -17,6 +17,7 @@ enum SneakContentType {
     case music
     case mic
     case battery
+    case bluetooth
     case download
 }
 
@@ -50,38 +51,17 @@ struct ExpandedItem {
 class BoringViewCoordinator: ObservableObject {
     static let shared = BoringViewCoordinator()
 
-    @Published var currentView: NotchViews = .home
     @Published var helloAnimationRunning: Bool = false
     private var sneakPeekDispatch: DispatchWorkItem?
     private var expandingViewDispatch: DispatchWorkItem?
-    private var hudEnableTask: Task<Void, Never>?
 
     @AppStorage("firstLaunch") var firstLaunch: Bool = true
     @AppStorage("showWhatsNew") var showWhatsNew: Bool = true
     @AppStorage("musicLiveActivityEnabled") var musicLiveActivityEnabled: Bool = true
     @AppStorage("currentMicStatus") var currentMicStatus: Bool = true
+    @Published private(set) var bluetoothDeviceName: String?
+    @Published private(set) var bluetoothIsConnected = true
 
-    @AppStorage("alwaysShowTabs") var alwaysShowTabs: Bool = true {
-        didSet {
-            if !alwaysShowTabs {
-                openLastTabByDefault = false
-                if ShelfStateViewModel.shared.isEmpty || !Defaults[.openShelfByDefault] {
-                    currentView = .home
-                }
-            }
-        }
-    }
-
-    @AppStorage("openLastTabByDefault") var openLastTabByDefault: Bool = false {
-        didSet {
-            if openLastTabByDefault {
-                alwaysShowTabs = true
-            }
-        }
-    }
-    
-    @Default(.hudReplacement) var hudReplacement: Bool
-    
     // Legacy storage for migration
     @AppStorage("preferred_screen_name") private var legacyPreferredScreenName: String?
     
@@ -98,10 +78,19 @@ class BoringViewCoordinator: ObservableObject {
     @Published var selectedScreenUUID: String = NSScreen.main?.displayUUID ?? ""
 
     @Published var optionKeyPressed: Bool = true
-    private var accessibilityObserver: Any?
-    private var hudReplacementCancellable: AnyCancellable?
-
     private init() {
+        // Floater is music-only. Reset old Boring Notch module preferences so
+        // previously saved values cannot re-enable an unsupported integration.
+        Defaults[.hudReplacement] = false
+        Defaults[.inlineHUD] = false
+        Defaults[.showOpenNotchHUD] = false
+        Defaults[.showOpenNotchHUDPercentage] = false
+        Defaults[.showClosedNotchHUDPercentage] = false
+        Defaults[.showCalendar] = false
+        Defaults[.showBatteryIndicator] = false
+        Defaults[.showBatteryPercentage] = false
+        Defaults[.showPowerStatusNotifications] = false
+        Defaults[.releaseName] = "Floater"
         // Perform migration from name-based to UUID-based storage
         if preferredScreenUUID == nil, let legacyName = legacyPreferredScreenName {
             // Try to find screen by name and migrate to UUID
@@ -122,56 +111,8 @@ class BoringViewCoordinator: ObservableObject {
         }
         
         selectedScreenUUID = preferredScreenUUID ?? NSScreen.main?.displayUUID ?? ""
-        // Observe changes to accessibility authorization and react accordingly
-        accessibilityObserver = NotificationCenter.default.addObserver(
-            forName: Notification.Name.accessibilityAuthorizationChanged,
-            object: nil,
-            queue: .main
-        ) { _ in
-            Task { @MainActor in
-                if Defaults[.hudReplacement] {
-                    await MediaKeyInterceptor.shared.start(promptIfNeeded: false)
-                }
-            }
-        }
-
-        // Observe changes to hudReplacement
-        hudReplacementCancellable = Defaults.publisher(.hudReplacement)
-            .sink { [weak self] change in
-                Task { @MainActor in
-                    guard let self = self else { return }
-
-                    self.hudEnableTask?.cancel()
-                    self.hudEnableTask = nil
-
-                    if change.newValue {
-                        self.hudEnableTask = Task { @MainActor in
-                            let granted = await XPCHelperClient.shared.ensureAccessibilityAuthorization(promptIfNeeded: true)
-                            if Task.isCancelled { return }
-
-                            if granted {
-                                await MediaKeyInterceptor.shared.start()
-                            } else {
-                                Defaults[.hudReplacement] = false
-                            }
-                        }
-                    } else {
-                        MediaKeyInterceptor.shared.stop()
-                    }
-                }
-            }
-
         Task { @MainActor in
             helloAnimationRunning = firstLaunch
-
-            if Defaults[.hudReplacement] {
-                let authorized = await XPCHelperClient.shared.isAccessibilityAuthorized()
-                if !authorized {
-                    Defaults[.hudReplacement] = false
-                } else {
-                    await MediaKeyInterceptor.shared.start(promptIfNeeded: false)
-                }
-            }
         }
     }
     
@@ -275,13 +216,21 @@ class BoringViewCoordinator: ObservableObject {
         }
     }
 
+    func showBluetoothConnection(named deviceName: String, isConnected: Bool) {
+        withAnimation(.spring(response: 0.28, dampingFraction: 0.86, blendDuration: 0)) {
+            bluetoothDeviceName = deviceName
+            bluetoothIsConnected = isConnected
+            expandingView = ExpandedItem(show: true, type: .bluetooth)
+        }
+    }
+
     private var expandingViewTask: Task<Void, Never>?
 
     @Published var expandingView: ExpandedItem = .init() {
         didSet {
             if expandingView.show {
                 expandingViewTask?.cancel()
-                let duration: TimeInterval = (expandingView.type == .download ? 2 : 3)
+                let duration: TimeInterval = expandingView.type == .download ? 2 : expandingView.type == .bluetooth ? 4 : 3
                 let currentType = expandingView.type
                 expandingViewTask = Task { [weak self] in
                     try? await Task.sleep(for: .seconds(duration))
@@ -290,11 +239,12 @@ class BoringViewCoordinator: ObservableObject {
                 }
             } else {
                 expandingViewTask?.cancel()
+                if expandingView.type == .bluetooth {
+                    bluetoothDeviceName = nil
+                    bluetoothIsConnected = true
+                }
             }
         }
     }
     
-    func showEmpty() {
-        currentView = .home
-    }
 }

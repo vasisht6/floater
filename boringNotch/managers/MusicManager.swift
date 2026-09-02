@@ -6,6 +6,7 @@
 //
 import AppKit
 import Combine
+import CoreAudio
 import Defaults
 import SwiftUI
 
@@ -557,9 +558,7 @@ class MusicManager: ObservableObject {
         workItem?.cancel()
         withAnimation(.smooth) {
             self.albumArt = newAlbumArt
-            if Defaults[.coloredSpectrogram] {
-                self.calculateAverageColor()
-            }
+            self.calculateAverageColor()
         }
     }
 
@@ -624,26 +623,33 @@ class MusicManager: ObservableObject {
     }
     
     func togglePlay() {
-        Task {
+        Task(priority: .userInitiated) {
             await activeController?.togglePlay()
         }
     }
 
     func nextTrack() {
-        Task {
+        Task(priority: .userInitiated) {
             await activeController?.nextTrack()
         }
     }
 
     func previousTrack() {
-        Task {
+        Task(priority: .userInitiated) {
             await activeController?.previousTrack()
         }
     }
 
     func seek(to position: TimeInterval) {
-        Task {
-            await activeController?.seek(to: position)
+        let targetPosition = min(max(0, position), songDuration)
+
+        // Update the player UI immediately; the controller will replace this with
+        // the media app's authoritative timestamp as soon as it arrives.
+        elapsedTime = targetPosition
+        timestampDate = Date()
+
+        Task(priority: .userInitiated) {
+            await activeController?.seek(to: targetPosition)
         }
     }
     func skip(seconds: TimeInterval) {
@@ -734,6 +740,121 @@ class MusicManager: ObservableObject {
                     self.volume = currentVolume
                 }
             }
+        }
+    }
+}
+
+/// Uses Core Audio instead of the legacy IOBluetooth device-list API, which
+/// can block indefinitely inside a sandboxed macOS app.
+final class BluetoothConnectionManager {
+    static let shared = BluetoothConnectionManager()
+
+    private var pollTimer: Timer?
+    private var connectedAudioDevices: [AudioDeviceID: String] = [:]
+
+    private init() {}
+
+    func start() {
+        guard pollTimer == nil else { return }
+
+        installAudioDeviceListener()
+        refreshConnectedAudioDevices()
+        // The listener normally fires as soon as Core Audio adds or removes a
+        // device. This short fallback also catches devices that only change
+        // their alive state, without adding a visible notification delay.
+        pollTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+            self?.refreshConnectedAudioDevices()
+        }
+    }
+
+    private func installAudioDeviceListener() {
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDevices,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        AudioObjectAddPropertyListenerBlock(
+            AudioObjectID(kAudioObjectSystemObject), &address, .main
+        ) { [weak self] _, _ in
+            self?.refreshConnectedAudioDevices()
+        }
+    }
+
+    private func refreshConnectedAudioDevices() {
+        let currentDevices = bluetoothAudioDevices()
+        for (identifier, name) in currentDevices where connectedAudioDevices[identifier] == nil {
+            presentConnection(named: name, isConnected: true)
+        }
+        for (identifier, name) in connectedAudioDevices where currentDevices[identifier] == nil {
+            presentConnection(named: name, isConnected: false)
+        }
+        connectedAudioDevices = currentDevices
+    }
+
+    private func bluetoothAudioDevices() -> [AudioDeviceID: String] {
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDevices,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        var dataSize: UInt32 = 0
+        guard AudioObjectGetPropertyDataSize(
+            AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &dataSize
+        ) == noErr else { return [:] }
+
+        var deviceIDs = [AudioDeviceID](repeating: 0, count: Int(dataSize) / MemoryLayout<AudioDeviceID>.size)
+        guard AudioObjectGetPropertyData(
+            AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &dataSize, &deviceIDs
+        ) == noErr else { return [:] }
+
+        return Dictionary(uniqueKeysWithValues: deviceIDs.compactMap { deviceID in
+            guard isAlive(deviceID), isBluetooth(deviceID), let name = deviceName(deviceID) else { return nil }
+            return (deviceID, name)
+        })
+    }
+
+    private func isAlive(_ deviceID: AudioDeviceID) -> Bool {
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyDeviceIsAlive,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        var alive: UInt32 = 0
+        var dataSize = UInt32(MemoryLayout<UInt32>.size)
+        return AudioObjectGetPropertyData(deviceID, &address, 0, nil, &dataSize, &alive) == noErr && alive != 0
+    }
+
+    private func isBluetooth(_ deviceID: AudioDeviceID) -> Bool {
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyTransportType,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        var transport: UInt32 = 0
+        var dataSize = UInt32(MemoryLayout<UInt32>.size)
+        guard AudioObjectGetPropertyData(deviceID, &address, 0, nil, &dataSize, &transport) == noErr else {
+            return false
+        }
+        return transport == kAudioDeviceTransportTypeBluetooth || transport == kAudioDeviceTransportTypeBluetoothLE
+    }
+
+    private func deviceName(_ deviceID: AudioDeviceID) -> String? {
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioObjectPropertyName,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        var name: CFString = "" as CFString
+        var dataSize = UInt32(MemoryLayout<CFString>.size)
+        guard AudioObjectGetPropertyData(deviceID, &address, 0, nil, &dataSize, &name) == noErr else {
+            return nil
+        }
+        return name as String
+    }
+
+    private func presentConnection(named deviceName: String, isConnected: Bool) {
+        Task { @MainActor in
+            BoringViewCoordinator.shared.showBluetoothConnection(named: deviceName, isConnected: isConnected)
         }
     }
 }

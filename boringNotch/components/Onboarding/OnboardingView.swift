@@ -6,11 +6,9 @@
 //
 
 import SwiftUI
-import AVFoundation
 
 enum OnboardingStep {
     case welcome
-    case cameraPermission
     case calendarPermission
     case remindersPermission
     case accessibilityPermission
@@ -31,38 +29,16 @@ struct OnboardingView: View {
             case .welcome:
                 WelcomeView {
                     withAnimation(.easeInOut(duration: 0.6)) {
-                        step = .cameraPermission
+                        step = .calendarPermission
                     }
                 }
-                .transition(.opacity)
-
-            case .cameraPermission:
-                PermissionRequestView(
-                    icon: Image(systemName: "camera.fill"),
-                    title: "Enable Camera Access",
-                    description: "Boring Notch includes a mirror feature that lets you quickly check your appearance using your camera, right from the notch. Camera access is required only to show this live preview. You can turn the mirror feature on or off at any time in the app.",
-                    privacyNote: "Your camera is never used without your consent, and nothing is recorded or stored.",
-                    onAllow: {
-                        Task {
-                            await requestCameraPermission()
-                            withAnimation(.easeInOut(duration: 0.6)) {
-                                step = .calendarPermission
-                            }
-                        }
-                    },
-                    onSkip: {
-                        withAnimation(.easeInOut(duration: 0.6)) {
-                            step = .calendarPermission
-                        }
-                    }
-                )
                 .transition(.opacity)
 
             case .calendarPermission:
                 PermissionRequestView(
                     icon: Image(systemName: "calendar"),
                     title: "Enable Calendar Access",
-                    description: "Boring Notch can show all your upcoming events in one place. Access to your calendar is needed to display your schedule.",
+                    description: "Floater is a music-focused notch controller. Calendar access is not used.",
                     privacyNote: "Your calendar data is only used to show your events and is never shared.",
                     onAllow: {
                         Task {
@@ -84,7 +60,7 @@ struct OnboardingView: View {
                     PermissionRequestView(
                         icon: Image(systemName: "checklist"),
                         title: "Enable Reminders Access",
-                        description: "Boring Notch can show your scheduled reminders alongside your calendar events. Access to Reminders is needed to display your reminders.",
+                        description: "Floater does not use Reminders integration.",
                         privacyNote: "Your reminders data is only used to show your reminders and is never shared.",
                         onAllow: {
                             Task {
@@ -106,7 +82,7 @@ struct OnboardingView: View {
                 PermissionRequestView(
                     icon: Image(systemName: "hand.raised.fill"),
                     title: "Enable Accessibility Access",
-                    description: "Accessibility access is required to replace system notifications with the Boring Notch HUD. This allows the app to intercept media and brightness events to display custom HUD overlays.",
+                    description: "Floater does not replace system HUDs or intercept media and brightness events.",
                     privacyNote: "Accessibility access is used only to improve media and brightness notifications. No data is collected or shared.",
                     onAllow: {
                         Task {
@@ -144,10 +120,6 @@ struct OnboardingView: View {
 
     // MARK: - Permission Request Logic
 
-    func requestCameraPermission() async {
-        await AVCaptureDevice.requestAccess(for: .video)
-    }
-
     func requestCalendarPermission() async {
         _ = try? await calendarService.requestAccess(to: .event)
     }
@@ -157,6 +129,6 @@ struct OnboardingView: View {
     }
     
     func requestAccessibilityPermission() async {
-        await XPCHelperClient.shared.ensureAccessibilityAuthorization(promptIfNeeded: true)
+        _ = await XPCHelperClient.shared.ensureAccessibilityAuthorization(promptIfNeeded: true)
     }
 }
